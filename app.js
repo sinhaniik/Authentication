@@ -1,5 +1,5 @@
 require("dotenv").config()
-const md5 = require('md5');
+const bcrypt = require("bcrypt")
 const express = require( 'express' );
 const bodyParser = require( 'body-parser' );
 const ejs = require( 'ejs' );
@@ -7,7 +7,7 @@ const mongoose = require("mongoose")
 const {connect} = require("mongoose");
 
 const {Schema} = mongoose;
-
+const salt = 10;
 const app = express();
 app.use( express.static( 'public' ) );
 app.set( 'view engine' , 'ejs' );
@@ -21,7 +21,6 @@ const UsersSchema = new Schema({
 	email: String,
 	password: String
 });
-
 
 const User = mongoose.model("users", UsersSchema);
 
@@ -38,34 +37,38 @@ app.get( '/register' , function ( req , res ) {
 res.render( 'register.ejs' );
 } );
 
-app.post("/register", async (req, res) => {
-	try {
-		const newUser = new User({
-			email: req.body.username,
-			password: md5(req.body.password)
-		});
+app.post( '/register' , async ( req , res ) => {
+	bcrypt.hash( req.body.password , salt , function ( err , hash ) {
+		try {
+			const newUser = new User( {
+				email: req.body.username ,
+				password: hash,
+			} );
+			
+			newUser.save();
+			res.render( 'secrets.ejs' );
+		} catch ( err ) {
+			console.log( err );
+		}
+	} );
+} );
 
-		await newUser.save();
-		res.render("secrets.ejs");
-	} catch (err) {
-		console.log(err);
-	}
-});
-
-app.post("/login", (req, res) => {
+app.post( '/login' , ( req , res ) => {
 	const newEmail = req.body.username;
-	const newPass = md5(req.body.password);
-
-	User.findOne({email: newEmail})
-		.then((foundUser) => {
-			if (foundUser && foundUser.password === newPass) {
-				res.render("secrets.ejs");
-			}
-		})
-		.catch((err) => {
-			console.log(err);
-		});
-});
+	const newPass = req.body.password;
+	
+	User.findOne( { email: newEmail , password: newPass } ).
+	  then( ( foundUser ) => {
+		  bcrypt.compare( req.body.password , bcrypt.hash ,
+			function ( err , result ) {
+				if ( result === true ) {
+					res.render( 'secrets.ejs' );
+				} else {
+					console.log( err );
+				}
+			} );
+	  } );
+} );
 app.listen( 3000 , function () {
 	console.log( 'server started on the port 3000' );
 } );
